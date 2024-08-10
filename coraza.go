@@ -14,6 +14,7 @@ import (
 	"github.com/caddyserver/caddy/v2/caddyconfig/httpcaddyfile"
 	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	coreruleset "github.com/corazawaf/coraza-coreruleset/v4"
+	geo "github.com/corazawaf/coraza-geoip"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/corazawaf/coraza/v3/types"
 	"github.com/jcchavezs/mergefs"
@@ -29,9 +30,10 @@ func init() {
 // corazaModule is a Web Application Firewall implementation for Caddy.
 type corazaModule struct {
 	// deprecated
-	Include      []string `json:"include"`
-	Directives   string   `json:"directives"`
-	LoadOWASPCRS bool     `json:"load_owasp_crs"`
+	Include        []string `json:"include"`
+	Directives     string   `json:"directives"`
+	SecGeoLookupDb string   `json:"sec_geo_lookup_db"`
+	LoadOWASPCRS   bool     `json:"load_owasp_crs"`
 
 	logger *zap.Logger
 	waf    coraza.WAF
@@ -59,6 +61,10 @@ func (m *corazaModule) Provision(ctx caddy.Context) error {
 
 	if m.Directives != "" {
 		config = config.WithDirectives(m.Directives)
+	}
+
+	if m.SecGeoLookupDb != "" {
+		geo.RegisterGeoDatabaseFromFile(m.SecGeoLookupDb, "country")
 	}
 
 	if len(m.Include) > 0 {
@@ -154,7 +160,7 @@ func (m *corazaModule) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				return d.ArgErr()
 			}
 			m.LoadOWASPCRS = true
-		case "directives", "include":
+		case "directives", "include", "sec_geo_lookup_db":
 			var value string
 			if !d.Args(&value) {
 				// not enough args
@@ -171,6 +177,8 @@ func (m *corazaModule) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				m.Include = append(m.Include, value)
 			case "directives":
 				m.Directives = value
+			case "sec_geo_lookup_db":
+				m.SecGeoLookupDb = value
 			}
 		default:
 			return d.Errf("invalid key %q", key)
